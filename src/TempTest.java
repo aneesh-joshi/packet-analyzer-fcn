@@ -4,7 +4,7 @@ import java.io.InputStream;
 
 public class TempTest {
     public static void main(String[] args) {
-        String fileName = "data/new_udp_packet1.bin";
+        String fileName = "data/new_icmp_packet2.bin";
 
         try (InputStream inputStream = new FileInputStream(fileName)) {
             byte[] fullPacket = new byte[(int) new File(fileName).length()];
@@ -123,7 +123,7 @@ public class TempTest {
                 processTCP(packet, offset);
                 break;
             case "ICMP":
-                processUDP(packet, offset);
+                processICMP(packet, offset);
                 break;
             default:
                 System.out.println("Unknown protocol");
@@ -139,12 +139,20 @@ public class TempTest {
         return "" + res;
     }
 
+    static String getNextNBytesLong(byte[] packet, int offset, int N) {
+        long res = (long)Byte.toUnsignedInt(packet[offset]);
+        for (int i = 1; i < N; i++) {
+            res = (res << 8) + (long)Byte.toUnsignedInt(packet[offset + i]);
+        }
+        return "" + res;
+    }
+
     static String getNextNBytesHex(byte[] packet, int offset, int N) {
         if(offset > packet.length)
             return "";
-        String res = String.format("%02X", Byte.toUnsignedInt(packet[offset]));
+        String res = String.format("%02x", Byte.toUnsignedInt(packet[offset]));
         for (int i = 1; i < N && offset + i < packet.length; i++) {
-            res += (i % 2 == 0 ? " " : "") + String.format("%02X", Byte.toUnsignedInt(packet[offset + i]));
+            res += (i % 2 == 0 ? " " : "") + String.format("%02x", Byte.toUnsignedInt(packet[offset + i]));
         }
         return res;
     }
@@ -170,17 +178,79 @@ public class TempTest {
         i += 2;
         while (i < packet.length) {
             System.out.println(getNextNBytesHex(packet, i, 16) + " ");
-            i += 16;
+            i += 16; // TODO recheck
         }
+        // TODO add ascii representation
 
     }
 
-    static void processTCP(byte[] packet, int offset) {
+    static void processTCP(byte[] packet, int i) {
+        System.out.println("----------TCP-----------");
+        System.out.println("Source Port " + getNextNBytes(packet, i, 2));
+        i += 2;
 
+        System.out.println("Destination Port " + getNextNBytes(packet, i, 2));
+        i += 2;
+
+        System.out.println("Sequence Number " + getNextNBytes(packet, i, 4));
+        i += 4;
+
+        System.out.println("Acknowledgement Number " + getNextNBytesLong(packet, i, 4));
+        i += 4;
+
+        System.out.println("Data Offset = " +
+                (((Byte.toUnsignedInt(packet[i]) & 0b11110000) >> 4)) + " bytes");
+        i += 1;
+
+
+        byte isUrgent = (byte) ((packet[i] & 0b00100000) >> 5);
+        byte isAck = (byte) ((packet[i] & 0b00010000) >> 4);
+        byte isPush = (byte) ((packet[i] & 0b00001000) >> 3);
+        byte isReset = (byte) ((packet[i] & 0b00000100) >> 2);
+        byte isSyn = (byte) ((packet[i] & 0b00000010) >> 1);
+        byte isFin = (byte) ((packet[i] & 0b00000001));
+        System.out.printf("..%d. .... = %s\n", isUrgent, (isUrgent == 1 ? "URGENT " : "No urgent pointer"));
+        System.out.printf("...%d .... = %s\n", isAck, (isAck == 1 ? "Acknowledgement " : "No acknowledgment"));
+        System.out.printf(".... %d... = %s\n", isPush, (isPush == 1 ? "Push " : "No push"));
+        System.out.printf(".... .%d.. = %s\n", isReset, (isReset == 1 ? "Reset " : "no reset"));
+        System.out.printf(".... ..%d. = %s\n", isSyn, (isSyn == 1 ? "SYN " : "no syn"));
+        System.out.printf(".... ...%d = %s\n", isFin, (isFin == 1 ? "FIN " : "no fin"));
+        i += 1;
+
+        System.out.println("Window = " + getNextNBytes(packet, i, 2));
+        i += 2;
+
+        System.out.println("Checksum = 0x" + getNextNBytesHex(packet, i, 2));
+        i += 2;
+
+        System.out.println("Urgent pointer = " + getNextNBytes(packet, i, 2));
+        i += 2;
+
+        // TODO offset
+
+        i += 2;
+        while (i < packet.length) {
+            System.out.println(getNextNBytesHex(packet, i, 16) + " ");
+            i += 16; // TODO recheck
+        }
     }
 
-    static void processICMP(byte[] packet, int offset) {
+    static void processICMP(byte[] packet, int i) {
+        System.out.println("----------ICMP-------------");
 
+        System.out.println("Type :" + getNextNBytes(packet, i, 1));
+        i += 1;
+
+        System.out.println("Code :" + getNextNBytes(packet, i, 1));
+        i += 1;
+
+        System.out.println("Checksum :" + getNextNBytes(packet, i, 2));
+        i += 2;
+
+        while (i < packet.length) {
+            System.out.println(getNextNBytesHex(packet, i, 16) + " ");
+            i += 16; // TODO recheck
+        }
     }
 
 }
